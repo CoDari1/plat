@@ -196,6 +196,7 @@ button:disabled:hover { color: var(--text); border-color: var(--border-strong); 
 .file-button span, .file-button small { display: block; text-align: center; }
 .file-button small { margin-top: 7px; color: var(--muted); font-size: 9px; }
 .hint, .empty-copy { color: var(--muted); line-height: 1.5; }
+.warning-copy { color: #e8735c; line-height: 1.5; font-size: 0.85em; background: rgba(232,115,92,0.08); border: 0.5px solid rgba(232,115,92,0.35); padding: 8px 10px; margin: 4px 0 10px; }
 
 /* Inputs */
 

@@ -92,6 +92,7 @@ export default function Home() {
             }));
 
             const known = new Set([aligned[0].id]);
+            const rotationUncorrected: string[] = [];
 
 
             for (let round = 0; round < aligned.length; round++) {
@@ -174,6 +175,10 @@ export default function Home() {
                         continue;
                     }
 
+                    if (localPoints.length === 1) {
+                        rotationUncorrected.push(img.name);
+                    }
+
 
                     const transform =
                         localPoints.length === 1
@@ -223,11 +228,17 @@ export default function Home() {
             }
 
 
-            setMessage(
+            const base =
                 known.size === aligned.length
                     ? `Aligned all ${aligned.length} plates.`
-                    : `Aligned ${known.size}/${aligned.length} plates.`
-            );
+                    : `Aligned ${known.size}/${aligned.length} plates.`;
+
+            const warning =
+                rotationUncorrected.length > 0
+                    ? ` ⚠ ${rotationUncorrected.join(", ")} used only 1 control point — rotation NOT corrected, only positioned. Add a 2nd point (away from the 1st) on ${rotationUncorrected.length === 1 ? "that image" : "each of those images"} and re-align for an exact fit.`
+                    : "";
+
+            setMessage(base + warning);
 
 
             return aligned;

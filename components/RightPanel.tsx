@@ -12,9 +12,28 @@ export default function RightPanel({ points, images, setPoints, onAutoDetect, on
     setRefine: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
     const name = (id: number) => images.find((image) => image.id === id)?.name ?? "Removed image";
+
+    const pairCounts = new Map<string, number>();
+    points.forEach((point) => {
+        const key = [point.aId, point.bId].sort((a, b) => a - b).join(":");
+        pairCounts.set(key, (pairCounts.get(key) ?? 0) + 1);
+    });
+    const thinPairs = [...pairCounts.entries()]
+        .filter(([, count]) => count === 1)
+        .map(([key]) => {
+            const [aId, bId] = key.split(":").map(Number);
+            return `${name(aId)} ↔ ${name(bId)}`;
+        });
+
     return (
         <aside className="right-panel">
             <div className="section-title first">Control points · {points.length}</div>
+            {thinPairs.length > 0 && (
+                <p className="warning-copy">
+                    ⚠ Only 1 point between {thinPairs.join("; ")} — rotation can&apos;t be solved from a single point.
+                    Add at least one more point on {thinPairs.length === 1 ? "that pair" : "each of those pairs"}, away from the first, before aligning.
+                </p>
+            )}
             <div className="point-list">
                 {points.length === 0 && <p className="empty-copy">Add matching points manually or run auto detect.</p>}
                 {points.map((point, index) => (
