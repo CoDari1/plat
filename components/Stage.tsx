@@ -5,6 +5,7 @@ import StageImage from "./StageImage";
 import { ControlPoint, PendingPoint, PlatImage } from "@/types";
 import ControlPointOverlay from "@/components/ControlPointOverlay";
 import { localToWorld } from "@/lib/transforms";
+import { snapToEdge } from "@/lib/autoCorrect";
 
 const VIEW_SCALE = 0.25;
 
@@ -27,10 +28,12 @@ export default function Stage({
     pending,
     setPending,
 }: Props) {
-    function addControlPoint(img: PlatImage, x: number, y: number) {
+    async function addControlPoint(img: PlatImage, rawX: number, rawY: number) {
         if (mode !== "point") {
             return;
         }
+
+        const { x, y } = await snapToEdge(img, rawX, rawY);
 
         if (pending && pending.imgId === img.id) {
             setPending(null);

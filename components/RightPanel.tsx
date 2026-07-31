@@ -30,7 +30,7 @@ export default function RightPanel({ points, images, setPoints, onAutoDetect, on
                 <button disabled={points.length === 0 || busy} onClick={onAlign}>ALIGN IMAGES</button>
                 <label className="refine-toggle">
                     <input type="checkbox" checked={refine} onChange={(event) => setRefine(event.target.checked)} />
-                    <span><strong>AUTO REFINE</strong><small>Color normalization + multi-band seams</small></span>
+                    <span><strong>AUTO REFINE</strong><small>Color-matches &amp; blends seams — alters overlap pixels. Leave off for exact reproduction (surveys, legal docs); last image drawn wins the seam instead.</small></span>
                 </label>
                 <button className="primary" disabled={images.length === 0 || busy} onClick={onExport}>PREVIEW EXPORT</button>
             </div>

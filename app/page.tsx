@@ -17,6 +17,7 @@ import StatusBar from "@/components/StatusBar";
 import PreviewModal from "@/components/PreviewModal";
 
 import { autoDetect } from "@/lib/autoDetect";
+import { autoCorrectSource, clearGrayCache } from "@/lib/autoCorrect";
 import { buildComposite, localToWorld } from "@/lib/transforms";
 import { encodeTIFF } from "@/lib/tiffEncoder";
 import { fitSimilarity } from "@/lib/stitching";
@@ -44,7 +45,7 @@ export default function Home() {
         useState(false);
 
     const [refine, setRefine] =
-        useState(true);
+        useState(false);
 
     const [message, setMessage] =
         useState<string | null>(null);
@@ -455,6 +456,39 @@ export default function Home() {
 
 
 
+    async function handleAutoCorrect() {
+        setBusy(true);
+        setMessage(null);
+        try {
+            const corrected = await Promise.all(
+                images.map(async (image) => {
+                    const result = await autoCorrectSource(image.src, { r: 255, g: 255, b: 255 });
+                    clearGrayCache(image.id);
+                    return {
+                        ...image,
+                        src: result.src,
+                        natW: result.width,
+                        natH: result.height,
+                        rot: 0, // baked into the pixels now
+                    };
+                })
+            );
+            setImages(corrected);
+            // Local pixel coordinates on every image just shifted (rotation +
+            // canvas expansion), so any existing control points are stale.
+            setPoints([]);
+            setPending(null);
+            setMessage(
+                `Auto-corrected ${corrected.length} image(s) — straightened to true 0/90° and background normalized to white. Control points were cleared since coordinates shifted; re-add or re-run auto detect.`
+            );
+        } catch (error) {
+            console.error(error);
+            setMessage(error instanceof Error ? error.message : "Auto-correct failed.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
     function handleRemoveImage(id: number) {
 
         setImages((current) =>
@@ -497,6 +531,8 @@ export default function Home() {
                     mode={mode}
                     setMode={setMode}
                     onRemove={handleRemoveImage}
+                    onAutoCorrect={handleAutoCorrect}
+                    busy={busy}
                 />
 
 

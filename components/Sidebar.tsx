@@ -5,12 +5,14 @@ import { useImageLoader } from "@/hooks/useImages";
 import { arrangePlatGrid } from "@/lib/layout";
 import { EditorMode, PlatImage } from "@/types";
 
-export default function Sidebar({ images, setImages, mode, setMode, onRemove }: {
+export default function Sidebar({ images, setImages, mode, setMode, onRemove, onAutoCorrect, busy }: {
     images: PlatImage[];
     setImages: React.Dispatch<React.SetStateAction<PlatImage[]>>;
     mode: EditorMode;
     setMode: React.Dispatch<React.SetStateAction<EditorMode>>;
     onRemove: (id: number) => void;
+    onAutoCorrect: () => void | Promise<void>;
+    busy: boolean;
 }) {
     const loadFiles = useImageLoader(setImages);
 
@@ -37,6 +39,12 @@ export default function Sidebar({ images, setImages, mode, setMode, onRemove }: 
 
             <div className="section-title">Images · {images.length}</div>
             <ImageList images={images} setImages={setImages} onRemove={onRemove} />
+            {images.length > 0 && (
+                <button className="wide" disabled={busy} onClick={onAutoCorrect}>
+                    {busy ? "CORRECTING…" : "AUTO-CORRECT (straighten + background)"}
+                </button>
+            )}
+            <p className="hint">Snaps each scan to true 0/90°, normalizes background to white. Run this before placing control points — it clears any existing ones.</p>
             {images.length > 1 && <button className="wide" onClick={() => setImages((current) => arrangePlatGrid(current))}>RESET TO 3-COLUMN GRID</button>}
         </aside>
     );
