@@ -1,65 +1,561 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import {
+    ControlPoint,
+    EditorMode,
+    PendingPoint,
+    PlatImage,
+    Point,
+} from "@/types";
+
+import TopBar from "@/components/TopBar";
+import Sidebar from "@/components/Sidebar";
+import Stage from "@/components/Stage";
+import RightPanel from "@/components/RightPanel";
+import StatusBar from "@/components/StatusBar";
+import PreviewModal from "@/components/PreviewModal";
+
+import { autoDetect } from "@/lib/autoDetect";
+import { buildComposite, localToWorld } from "@/lib/transforms";
+import { encodeTIFF } from "@/lib/tiffEncoder";
+import { fitSimilarity } from "@/lib/stitching";
+
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    const [images, setImages] = useState<PlatImage[]>([]);
+    const [points, setPoints] = useState<ControlPoint[]>([]);
+    const [mode, setMode] = useState<EditorMode>("move");
+    const [pending, setPending] = useState<PendingPoint | null>(null);
+
+    const [previewCanvas, setPreviewCanvas] =
+        useState<HTMLCanvasElement | null>(null);
+
+    const [aiCanvas, setAiCanvas] =
+        useState<HTMLCanvasElement | null>(null);
+
+    const [aiAnalysis, setAiAnalysis] =
+        useState<string | null>(null);
+
+    const [aiBusy, setAiBusy] =
+        useState(false);
+
+    const [busy, setBusy] =
+        useState(false);
+
+    const [refine, setRefine] =
+        useState(true);
+
+    const [message, setMessage] =
+        useState<string | null>(null);
+
+
+    async function handleAutoDetect() {
+        setBusy(true);
+        setMessage(null);
+
+        try {
+            const detected = await autoDetect(images);
+
+            setPoints((prev) => [
+                ...prev.filter((point) => !point.auto),
+                ...detected,
+            ]);
+
+            setMessage(
+                detected.length
+                    ? `Found ${detected.length} candidate matches.`
+                    : "No reliable matches found. Try manual points."
+            );
+
+        } catch {
+            setMessage("Auto detection failed for one or more images.");
+
+        } finally {
+            setBusy(false);
+        }
+    }
+
+
+    function handleAlign() {
+        setImages((prev) => {
+
+            if (prev.length === 0) {
+                return prev;
+            }
+
+
+            const aligned = prev.map((image) => ({
+                ...image,
+                scale: 1,
+            }));
+
+            const known = new Set([aligned[0].id]);
+
+
+            for (let round = 0; round < aligned.length; round++) {
+
+                let progressed = false;
+
+
+                for (const img of aligned) {
+
+                    if (known.has(img.id)) {
+                        continue;
+                    }
+
+
+                    const localPoints: Point[] = [];
+                    const worldPoints: Point[] = [];
+
+
+                    points.forEach((point) => {
+
+                        if (
+                            point.aId === img.id &&
+                            known.has(point.bId)
+                        ) {
+
+                            const other = aligned.find(
+                                (candidate) =>
+                                    candidate.id === point.bId
+                            );
+
+                            if (!other) return;
+
+
+                            localPoints.push({
+                                x: point.ax,
+                                y: point.ay,
+                            });
+
+                            worldPoints.push(
+                                localToWorld(
+                                    other,
+                                    point.bx,
+                                    point.by
+                                )
+                            );
+                        }
+
+
+                        if (
+                            point.bId === img.id &&
+                            known.has(point.aId)
+                        ) {
+
+                            const other = aligned.find(
+                                (candidate) =>
+                                    candidate.id === point.aId
+                            );
+
+                            if (!other) return;
+
+
+                            localPoints.push({
+                                x: point.bx,
+                                y: point.by,
+                            });
+
+                            worldPoints.push(
+                                localToWorld(
+                                    other,
+                                    point.ax,
+                                    point.ay
+                                )
+                            );
+                        }
+
+                    });
+
+
+                    if (localPoints.length === 0) {
+                        continue;
+                    }
+
+
+                    const transform =
+                        localPoints.length === 1
+                            ? {
+                                scale: 1,
+                                rot: img.rot,
+                                tx:
+                                    worldPoints[0].x -
+                                    (
+                                        Math.cos(img.rot) *
+                                        localPoints[0].x -
+                                        Math.sin(img.rot) *
+                                        localPoints[0].y
+                                    ),
+
+                                ty:
+                                    worldPoints[0].y -
+                                    (
+                                        Math.sin(img.rot) *
+                                        localPoints[0].x +
+                                        Math.cos(img.rot) *
+                                        localPoints[0].y
+                                    ),
+                            }
+                            :
+                            fitSimilarity(
+                                localPoints,
+                                worldPoints,
+                                "rigid"
+                            );
+
+
+                    img.x = transform.tx;
+                    img.y = transform.ty;
+                    img.rot = transform.rot;
+                    img.scale = 1;
+
+
+                    known.add(img.id);
+                    progressed = true;
+                }
+
+
+                if (!progressed) {
+                    break;
+                }
+            }
+
+
+            setMessage(
+                known.size === aligned.length
+                    ? `Aligned all ${aligned.length} plates.`
+                    : `Aligned ${known.size}/${aligned.length} plates.`
+            );
+
+
+            return aligned;
+        });
+    }
+
+
+    async function handleExportPreview() {
+
+        setBusy(true);
+        setMessage(null);
+
+
+        try {
+
+            const canvas = await buildComposite(
+                images,
+                refine
+            );
+
+
+            setPreviewCanvas(canvas);
+            setAiCanvas(null);
+            setAiAnalysis(null);
+
+
+        } catch {
+
+            setMessage(
+                "Could not render export preview."
+            );
+
+        } finally {
+
+            setBusy(false);
+
+        }
+    }
+
+
+
+    async function handleRestore() {
+
+        if (!previewCanvas) return;
+
+
+        setAiBusy(true);
+        setMessage(null);
+
+
+        try {
+
+            const blob = await new Promise<Blob>(
+                (resolve, reject) =>
+                    previewCanvas.toBlob(
+                        (value) =>
+                            value
+                                ? resolve(value)
+                                : reject(
+                                    new Error(
+                                        "Could not encode preview."
+                                    )
+                                ),
+                        "image/png"
+                    )
+            );
+
+
+            const form = new FormData();
+
+            form.set(
+                "image",
+                blob,
+                "stitched-preview.png"
+            );
+
+
+            const response = await fetch(
+                "/api/restore/process",
+                {
+                    method: "POST",
+                    body: form,
+                }
+            );
+
+
+            const payload = await response.json() as {
+                image?: string;
+                error?: string;
+            };
+
+
+            if (!response.ok || !payload.image) {
+                throw new Error(
+                    payload.error ??
+                    "Restoration failed."
+                );
+            }
+
+
+            const restored = new Image();
+
+
+            await new Promise<void>(
+                (resolve, reject) => {
+
+                    restored.onload = () =>
+                        resolve();
+
+                    restored.onerror = () =>
+                        reject(
+                            new Error(
+                                "Could not load restored image."
+                            )
+                        );
+
+                    restored.src =
+                        payload.image!;
+                }
+            );
+
+
+            const canvas =
+                document.createElement("canvas");
+
+
+            canvas.width =
+                restored.naturalWidth;
+
+            canvas.height =
+                restored.naturalHeight;
+
+
+            canvas
+                .getContext("2d")
+                ?.drawImage(
+                    restored,
+                    0,
+                    0
+                );
+
+
+            setAiCanvas(canvas);
+
+
+            setMessage(
+                "Restoration preview generated."
+            );
+
+
+        } catch (error) {
+
+            setMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Restoration failed."
+            );
+
+        } finally {
+
+            setAiBusy(false);
+
+        }
+    }
+
+
+
+    function handleClosePreview() {
+
+        setPreviewCanvas(null);
+        setAiCanvas(null);
+        setAiAnalysis(null);
+
+    }
+
+
+
+    function handleExportTIFF(
+        source = previewCanvas
+    ) {
+
+        if (!source) return;
+
+
+        const buffer =
+            encodeTIFF(
+                source,
+                300
+            );
+
+
+        const blob =
+            new Blob(
+                [buffer],
+                {
+                    type: "image/tiff",
+                }
+            );
+
+
+        const url =
+            URL.createObjectURL(blob);
+
+
+        const link =
+            document.createElement("a");
+
+
+        link.href = url;
+
+        link.download =
+            source === aiCanvas
+                ? "restored-preview.tiff"
+                : "stitch-archival.tiff";
+
+
+        link.click();
+
+
+        setTimeout(
+            () =>
+                URL.revokeObjectURL(url),
+            1000
+        );
+    }
+
+
+
+    function handleRemoveImage(id: number) {
+
+        setImages((current) =>
+            current.filter(
+                (image) =>
+                    image.id !== id
+            )
+        );
+
+
+        setPoints((current) =>
+            current.filter(
+                (point) =>
+                    point.aId !== id &&
+                    point.bId !== id
+            )
+        );
+
+
+        setPending((current) =>
+            current?.imgId === id
+                ? null
+                : current
+        );
+    }
+
+
+
+    return (
+        <main className="plat-app">
+
+            <TopBar />
+
+
+            <div className="workspace">
+
+                <Sidebar
+                    images={images}
+                    setImages={setImages}
+                    mode={mode}
+                    setMode={setMode}
+                    onRemove={handleRemoveImage}
+                />
+
+
+                <Stage
+                    images={images}
+                    setImages={setImages}
+                    points={points}
+                    setPoints={setPoints}
+                    mode={mode}
+                    pending={pending}
+                    setPending={setPending}
+                />
+
+
+                <RightPanel
+                    points={points}
+                    setPoints={setPoints}
+                    onAutoDetect={handleAutoDetect}
+                    onAlign={handleAlign}
+                    onExport={handleExportPreview}
+                    images={images}
+                    busy={busy}
+                    refine={refine}
+                    setRefine={setRefine}
+                />
+
+            </div>
+
+
+            {message && (
+                <button
+                    className="toast"
+                    onClick={() => setMessage(null)}
+                >
+                    {message}
+                    <span>×</span>
+                </button>
+            )}
+
+
+            <StatusBar
+                images={images.length}
+                points={points.length}
+                mode={mode}
+                refine={refine}
+                busy={busy}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+
+
+            <PreviewModal
+                canvas={previewCanvas}
+                aiCanvas={aiCanvas}
+                close={handleClosePreview}
+                exportTIFF={handleExportTIFF}
+                restoreWithAI={handleRestore}
+                aiBusy={aiBusy}
+                aiAnalysis={aiAnalysis}
+            />
+
+        </main>
+    );
 }
