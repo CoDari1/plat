@@ -203,7 +203,7 @@ export async function snapToEdge(
     image: PlatImage,
     x: number,
     y: number,
-    radius = 7
+    radius = 30
 ): Promise<{ x: number; y: number }> {
     try {
         const { gray, w, h } = await getGray(image);

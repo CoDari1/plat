@@ -33,7 +33,7 @@ export default function Stage({
             return;
         }
 
-        const { x, y } = await snapToEdge(img, rawX, rawY);
+        const { x, y } = await snapToEdge(img, rawX, rawY, 30);
 
         if (pending && pending.imgId === img.id) {
             setPending(null);
