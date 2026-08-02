@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import StageImage from "./StageImage";
-
 import { ControlPoint, PendingPoint, PlatImage } from "@/types";
 import ControlPointOverlay from "@/components/ControlPointOverlay";
 import { localToWorld } from "@/lib/transforms";
 import { snapToEdge } from "@/lib/autoCorrect";
+import { moveGroup } from "@/lib/group";
 
+
+    setImages(prev => moveGroup(prev, image.id, dx, dy));
+}
 const MIN_ZOOM = 0.03;
 const MAX_ZOOM = 3;
 const DEFAULT_ZOOM = 0.25;
@@ -78,6 +81,8 @@ export default function Stage({
             x,
             y,
         });
+
+
     }
 
     const extent = images.reduce((size, image) => {
@@ -88,6 +93,7 @@ export default function Stage({
             height: Math.max(size.height, ...corners.map((point) => point.y * zoom + 200)),
         };
     }, { width: 1200, height: 800 });
+
 
     return (
         <div className="stage-container" onWheel={onWheel}>

@@ -1,3 +1,4 @@
+// types/index.ts
 export interface PlatImage {
     id: number;
     name: string;
@@ -7,11 +8,11 @@ export interface PlatImage {
 
     x: number;
     y: number;
-
     rot: number;
     scale: number;
 
     placed?: boolean;
+    groupId?: number | null;
 }
 
 export interface Point {

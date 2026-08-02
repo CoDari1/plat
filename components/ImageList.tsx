@@ -30,6 +30,25 @@ export default function ImageList({ images, setImages, onRemove }: {
         );
     }
 
+    function lockTogether(ids: number[]) {
+        if (ids.length < 2) return;
+
+        setImages(prev => {
+            const newGroupId = Date.now();
+            return prev.map(img =>
+                ids.includes(img.id) ? { ...img, groupId: newGroupId } : img
+            );
+        });
+    }
+
+    function unlock(id: number) {
+        setImages(prev =>
+            prev.map(img =>
+                img.id === id ? { ...img, groupId: null } : img
+            )
+        );
+    }
+
     if (images.length === 0) return <p className="empty-copy">No images loaded yet.</p>;
 
     return <div className="image-list">{images.map((image, index) => (
@@ -57,6 +76,13 @@ export default function ImageList({ images, setImages, onRemove }: {
                 <button className="icon-button" onClick={() => nudgeRotation(image.id, 0.1)} title="Rotate +0.1°" aria-label={`Rotate ${image.name} clockwise 0.1 degree`}>›</button>
                 <button className="icon-button" onClick={() => nudgeRotation(image.id, 1)} title="Rotate +1°" aria-label={`Rotate ${image.name} clockwise 1 degree`}>↻</button>
                 <button className="icon-button" onClick={() => setRotationDeg(image.id, 0)} title="Reset rotation to 0°">0°</button>
+                <button
+                    className="icon-button"
+                    title={image.groupId ? "Unlock from group" : "Lock with selected"}
+                    onClick={() => toggleLock(image.id)}
+                >
+                    {image.groupId ? "🔓" : "🔒"}
+                </button>
             </div>
         </div>
     ))}</div>;
