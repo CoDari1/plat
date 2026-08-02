@@ -18,7 +18,7 @@ export async function POST(request: Request) {
         const buffer = Buffer.from(await image.arrayBuffer());
 
         // 1. Light cleanup
-        let restored = await cleanupScan(buffer);
+        let restored: Buffer = await cleanupScan(buffer);
 
         // 2. Detect creases
         const { data, info } = await sharp(restored)

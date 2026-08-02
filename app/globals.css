@@ -192,6 +192,8 @@ button:disabled:hover { color: var(--text); border-color: var(--border-strong); 
 .danger:hover { color: var(--coral); border-color: var(--coral); }
 .file-button { display: grid; place-items: center; min-height: 70px; border: 1px dashed var(--border-strong); color: var(--green); cursor: pointer; letter-spacing: .08em; }
 .file-button:hover { background: rgba(62,207,142,.04); border-color: var(--green); }
+.file-button.busy { color: var(--coral, #e8735c); border-color: var(--coral, #e8735c); cursor: wait; animation: pulse-busy 1.2s ease-in-out infinite; }
+@keyframes pulse-busy { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .file-button span, .file-button small { display: block; text-align: center; }
 .file-button small { margin-top: 7px; color: var(--muted); font-size: 9px; }

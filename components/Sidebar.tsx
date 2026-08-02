@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import ImageList from "@/components/ImageList";
 import { useImageLoader } from "@/hooks/useImages";
 import { arrangePlatGrid } from "@/lib/layout";
@@ -15,17 +16,27 @@ export default function Sidebar({ images, setImages, mode, setMode, onRemove, on
     busy: boolean;
 }) {
     const loadFiles = useImageLoader(setImages);
+    const [uploading, setUploading] = useState(false);
+
+    async function handleFiles(files: FileList) {
+        setUploading(true);
+        try {
+            await loadFiles(files);
+        } finally {
+            setUploading(false);
+        }
+    }
 
     return (
         <aside className="sidebar">
-            <label className="file-button" onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+            <label className={`file-button ${uploading ? "busy" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
                 event.preventDefault();
-                if (event.dataTransfer.files.length) void loadFiles(event.dataTransfer.files);
+                if (event.dataTransfer.files.length) void handleFiles(event.dataTransfer.files);
             }}>
-                <span>＋ DROP PLATS HERE / CLICK TO UPLOAD</span>
-                <small>JPG · PNG · browser-supported images</small>
-                <input type="file" multiple accept="image/*" onChange={(event) => {
-                    if (event.target.files) void loadFiles(event.target.files);
+                <span>{uploading ? "PROCESSING…" : "＋ DROP PLATS HERE / CLICK TO UPLOAD"}</span>
+                <small>{uploading ? "Rasterizing pages — large PDFs can take a while" : "JPG · PNG · PDF (each page becomes a plate) · browser-supported images"}</small>
+                <input type="file" multiple accept="image/*,application/pdf,.pdf" disabled={uploading} onChange={(event) => {
+                    if (event.target.files) void handleFiles(event.target.files);
                     event.target.value = "";
                 }} />
             </label>
