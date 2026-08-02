@@ -9,8 +9,7 @@ interface LayoutOptions {
 export function arrangePlatGrid(
     images: PlatImage[],
     options: LayoutOptions = {
-        gap: 120,
-        overlap: 0,
+        gap: 0, overlap: 0.2
     }
 ) {
     const {

@@ -2,6 +2,8 @@
 
 import { PlatImage } from "@/types";
 
+const RAD = Math.PI / 180;
+
 export default function ImageList({ images, setImages, onRemove }: {
     images: PlatImage[];
     setImages: React.Dispatch<React.SetStateAction<PlatImage[]>>;
@@ -15,17 +17,47 @@ export default function ImageList({ images, setImages, onRemove }: {
         setImages(copy);
     }
 
+    function nudgeRotation(id: number, deltaDeg: number) {
+        setImages((current) =>
+            current.map((img) => (img.id === id ? { ...img, rot: img.rot + deltaDeg * RAD } : img))
+        );
+    }
+
+    function setRotationDeg(id: number, deg: number) {
+        if (Number.isNaN(deg)) return;
+        setImages((current) =>
+            current.map((img) => (img.id === id ? { ...img, rot: deg * RAD } : img))
+        );
+    }
+
     if (images.length === 0) return <p className="empty-copy">No images loaded yet.</p>;
 
     return <div className="image-list">{images.map((image, index) => (
         <div className="image-row" key={image.id}>
-            {/* User-selected data URL preview. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="thumbnail" src={image.src} alt="" />
-            <span className="image-name" title={image.name}>{image.name}</span>
-            <button className="icon-button" disabled={index === 0} onClick={() => reorder(index, -1)} aria-label={`Move ${image.name} up`}>↑</button>
-            <button className="icon-button" disabled={index === images.length - 1} onClick={() => reorder(index, 1)} aria-label={`Move ${image.name} down`}>↓</button>
-            <button className="icon-button danger" onClick={() => onRemove(image.id)} aria-label={`Remove ${image.name}`}>×</button>
+            <div className="image-row-main">
+                {/* User-selected data URL preview. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="thumbnail" src={image.src} alt="" />
+                <span className="image-name" title={image.name}>{image.name}</span>
+                <button className="icon-button" disabled={index === 0} onClick={() => reorder(index, -1)} aria-label={`Move ${image.name} up`}>↑</button>
+                <button className="icon-button" disabled={index === images.length - 1} onClick={() => reorder(index, 1)} aria-label={`Move ${image.name} down`}>↓</button>
+                <button className="icon-button danger" onClick={() => onRemove(image.id)} aria-label={`Remove ${image.name}`}>×</button>
+            </div>
+            <div className="image-row-rotate">
+                <button className="icon-button" onClick={() => nudgeRotation(image.id, -1)} title="Rotate −1°" aria-label={`Rotate ${image.name} counter-clockwise 1 degree`}>↺</button>
+                <button className="icon-button" onClick={() => nudgeRotation(image.id, -0.1)} title="Rotate −0.1°" aria-label={`Rotate ${image.name} counter-clockwise 0.1 degree`}>‹</button>
+                <input
+                    type="number"
+                    className="rotate-input"
+                    step={0.1}
+                    value={Math.round((image.rot / RAD) * 100) / 100}
+                    onChange={(event) => setRotationDeg(image.id, parseFloat(event.target.value))}
+                    aria-label={`${image.name} rotation in degrees`}
+                />
+                <button className="icon-button" onClick={() => nudgeRotation(image.id, 0.1)} title="Rotate +0.1°" aria-label={`Rotate ${image.name} clockwise 0.1 degree`}>›</button>
+                <button className="icon-button" onClick={() => nudgeRotation(image.id, 1)} title="Rotate +1°" aria-label={`Rotate ${image.name} clockwise 1 degree`}>↻</button>
+                <button className="icon-button" onClick={() => setRotationDeg(image.id, 0)} title="Reset rotation to 0°">0°</button>
+            </div>
         </div>
     ))}</div>;
 }

@@ -223,12 +223,24 @@ select {
 
 .image-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 5px;
   padding: 6px;
   margin-bottom: 5px;
   background: #0c1112;
   border: 1px solid var(--border);
+}
+.image-row-main { display: flex; align-items: center; gap: 8px; }
+.image-row-rotate { display: flex; align-items: center; gap: 4px; padding-left: 36px; }
+.rotate-input {
+  width: 52px;
+  background: #0a0e0f;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85em;
+  padding: 2px 4px;
+  text-align: center;
 }
 .image-list { display: flex; flex-direction: column; gap: 5px; }
 .image-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -238,6 +250,30 @@ select {
   height: 28px;
   object-fit: cover;
 }
+
+.zoom-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel, #0f1517);
+  border: 1px solid var(--border);
+  padding: 3px;
+}
+.zoom-readout {
+  min-width: 48px;
+  text-align: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.zoom-readout:hover { color: var(--text); }
 
 /* Modal */
 
