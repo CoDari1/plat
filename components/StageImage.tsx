@@ -2,6 +2,7 @@
 
 import { PlatImage } from "@/types";
 import { worldToLocal } from "@/lib/transforms";
+import { moveGroup } from "@/lib/group";
 
 interface Props {
     image: PlatImage;
@@ -12,12 +13,12 @@ interface Props {
 }
 
 export default function StageImage({
-    image,
-    mode,
-    setImages,
-    onPoint,
-    viewScale,
-}: Props) {
+                                       image,
+                                       mode,
+                                       setImages,
+                                       onPoint,
+                                       viewScale,
+                                   }: Props) {
     function mouseDown(e: React.MouseEvent) {
         e.stopPropagation();
 
@@ -34,21 +35,33 @@ export default function StageImage({
 
         const startX = e.clientX;
         const startY = e.clientY;
-        const oldX = image.x;
-        const oldY = image.y;
 
+        // Capture starting positions of the whole group (or just this image)
+        const startPositions = new Map<number, { x: number; y: number }>();
+
+        // We need the current images to know the group — we'll read them inside the updater
         function move(ev: MouseEvent) {
-            setImages((prev) =>
-                prev.map((img) =>
-                    img.id === image.id
-                        ? {
-                              ...img,
-                              x: oldX + (ev.clientX - startX) / viewScale,
-                              y: oldY + (ev.clientY - startY) / viewScale,
-                          }
-                        : img
-                )
-            );
+            const dx = (ev.clientX - startX) / viewScale;
+            const dy = (ev.clientY - startY) / viewScale;
+
+            setImages((prev) => {
+                // On first move, record original positions if needed
+                if (startPositions.size === 0) {
+                    const dragged = prev.find((i) => i.id === image.id);
+                    const groupId = dragged?.groupId;
+                    prev.forEach((img) => {
+                        if (!groupId || img.groupId === groupId || img.id === image.id) {
+                            startPositions.set(img.id, { x: img.x, y: img.y });
+                        }
+                    });
+                }
+
+                return prev.map((img) => {
+                    const start = startPositions.get(img.id);
+                    if (!start) return img;
+                    return { ...img, x: start.x + dx, y: start.y + dy };
+                });
+            });
         }
 
         function stop() {
@@ -56,26 +69,31 @@ export default function StageImage({
         }
 
         window.addEventListener("mousemove", move);
-        window.addEventListener("mouseup", stop, {
-            once: true,
-        });
+        window.addEventListener("mouseup", stop, { once: true });
     }
 
     return (
         <div
             onMouseDown={mouseDown}
-            className={`plat-image ${mode === "point" ? "point-mode" : ""}`}
+            className={`plat-image ${mode === "point" ? "point-mode" : ""} ${
+                image.groupId ? "grouped" : ""
+            }`}
             style={{
-               transform: `
-                   translate(${image.x * viewScale}px, ${image.y * viewScale}px)
-                   rotate(${image.rot}rad)
-                   scale(${image.scale * viewScale})
-               `,
+                transform: `
+          translate(${image.x * viewScale}px, ${image.y * viewScale}px)
+          rotate(${image.rot}rad)
+          scale(${image.scale * viewScale})
+        `,
             }}
         >
-            {/* User-loaded data URLs are already local and cannot be optimized by Next/Image. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.src} width={image.natW} height={image.natH} alt={image.name} draggable={false} />
+            <img
+                src={image.src}
+                width={image.natW}
+                height={image.natH}
+                alt={image.name}
+                draggable={false}
+            />
         </div>
     );
 }
