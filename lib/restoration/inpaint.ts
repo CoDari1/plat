@@ -39,7 +39,7 @@ export async function inpaint(
     cv.inpaint(src, maskMat, result, 4, cv.INPAINT_TELEA);
 
     // Convert back to PNG buffer
-    const resultData = new Uint8Array(result.data);
+    const resultData = Uint8Array.from(result.data);
     const outBuffer = await sharp(resultData, {
         raw: {
             width: result.cols,

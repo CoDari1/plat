@@ -53,27 +53,30 @@ function parseGuidance(raw: FormDataEntryValue | null): RestoreGuidance {
 }
 
 function protectInkInMask(
-    mask: ArrayLike<number>,
-    gray: ArrayLike<number>,
+    mask: Uint8Array,
+    gray: Uint8Array,
     width: number,
     height: number,
     edgeThreshold = 28
 ): Uint8Array {
-    const out = new Uint8Array(mask.length);
-    for (let i = 0; i < mask.length; i++) out[i] = mask[i];
+    // Force a fresh ArrayBuffer-backed copy
+    const out = Uint8Array.from(mask);
 
     for (let y = 1; y < height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
             const i = y * width + x;
+
             if (out[i] === 0) continue;
 
             const gx = gray[i + 1] - gray[i - 1];
             const gy = gray[i + width] - gray[i - width];
+
             if (Math.abs(gx) + Math.abs(gy) >= edgeThreshold) {
                 out[i] = 0;
             }
         }
     }
+
     return out;
 }
 
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
                 .raw()
                 .toBuffer({ resolveWithObject: true });
 
-            const gray = new Uint8Array(data);
+            const gray = Uint8Array.from(data);
             const thickness =
                 guidance.protectLines || guidance.protectText ? 12 : 16;
 

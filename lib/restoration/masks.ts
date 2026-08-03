@@ -74,34 +74,20 @@ export function createMask(
     width: number,
     height: number,
     defects: Defect[]
-) {
-    const mask = new Uint8Array(
-        width * height
-    );
-
+): Uint8Array {
+    const mask = new Uint8Array(width * height);
 
     for (const defect of defects) {
+        for (let y = defect.y; y < defect.y + defect.height; y++) {
+            if (y < 0 || y >= height) continue;
 
-        for (
-            let y = defect.y;
-            y < defect.y + defect.height;
-            y++
-        ) {
+            for (let x = defect.x; x < defect.x + defect.width; x++) {
+                if (x < 0 || x >= width) continue;
 
-            for (
-                let x = defect.x;
-                x < defect.x + defect.width;
-                x++
-            ) {
-
-                const index =
-                    y * width + x;
-
-                mask[index] = 255;
+                mask[y * width + x] = 255;
             }
         }
     }
-
 
     return mask;
 }
