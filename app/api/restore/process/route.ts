@@ -53,13 +53,15 @@ function parseGuidance(raw: FormDataEntryValue | null): RestoreGuidance {
 }
 
 function protectInkInMask(
-    mask: Uint8Array,
-    gray: Uint8Array,
+    mask: ArrayLike<number>,
+    gray: ArrayLike<number>,
     width: number,
     height: number,
     edgeThreshold = 28
 ): Uint8Array {
-    const out = new Uint8Array(mask);
+    const out = new Uint8Array(mask.length);
+    for (let i = 0; i < mask.length; i++) out[i] = mask[i];
+
     for (let y = 1; y < height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
             const i = y * width + x;
@@ -130,17 +132,13 @@ export async function POST(request: Request) {
                     );
                 }
 
+                maskPixels = 0;
                 for (let i = 0; i < mask.length; i++) {
                     if (mask[i] > 0) maskPixels++;
                 }
 
                 if (maskPixels > 0) {
-                    restored = await inpaint(
-                        restored,
-                        mask,
-                        info.width,
-                        info.height
-                    );
+                    restored = await inpaint(restored, mask, info.width, info.height);
                     creasesRemoved = defects.length;
                 }
             }
