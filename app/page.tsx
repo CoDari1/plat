@@ -22,7 +22,6 @@ import { buildComposite, localToWorld } from "@/lib/transforms";
 import { encodeTIFF } from "@/lib/tiffEncoder";
 import { fitSimilarity } from "@/lib/stitching";
 
-
 export default function Home() {
     const [images, setImages] = useState<PlatImage[]>([]);
     const [points, setPoints] = useState<ControlPoint[]>([]);
@@ -54,27 +53,25 @@ export default function Home() {
 
     async function handleAutoDetect() {
         setBusy(true);
-        setMessage(null);
-
+        setMessage("Detecting…");
         try {
             const detected = await autoDetect(images);
-
             setPoints((prev) => [
-                ...prev.filter((point) => !point.auto),
+                ...prev.filter((p) => !p.auto),
                 ...detected,
             ]);
-
             setMessage(
                 detected.length
                     ? `Found ${detected.length} candidate matches.`
                     : "No reliable matches found. Try manual points."
             );
-
-        } catch {
-            setMessage("Auto detection failed for one or more images.");
-
+        } catch (err) {
+            console.error(err);
+            setMessage(
+                err instanceof Error ? err.message : "Auto detection failed."
+            );
         } finally {
-            setBusy(false);
+            setBusy(false); // ← this must always run
         }
     }
 

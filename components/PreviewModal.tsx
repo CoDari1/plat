@@ -39,3 +39,4 @@ export default function PreviewModal({ canvas, aiCanvas, aiAnalysis, close, expo
         </div>
     </div>;
 }
+

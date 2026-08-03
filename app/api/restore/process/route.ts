@@ -6,45 +6,195 @@ import { inpaint } from "@/lib/restoration/inpaint";
 
 export const runtime = "nodejs";
 
+/** Guidance produced by /api/restore/analyze (Groq) or the client UI. */
+export interface RestoreGuidance {
+    /** Run horizontal crease detection + inpaint */
+    inpaintCreases: boolean;
+    /** Reserved for future stain / foxing pass */
+    inpaintStains: boolean;
+    /** Prefer keeping high-contrast ink when masking */
+    protectText: boolean;
+    /** Prefer keeping linework when masking */
+    protectLines: boolean;
+    /** Free-form notes from the model (logged only) */
+    notes?: string;
+}
+
+const DEFAULT_GUIDANCE: RestoreGuidance = {
+    inpaintCreases: true,
+    inpaintStains: false,
+    protectText: true,
+    protectLines: true,
+};
+
+function parseGuidance(raw: FormDataEntryValue | null): RestoreGuidance {
+    if (typeof raw !== "string" || !raw.trim()) {
+        return { ...DEFAULT_GUIDANCE };
+    }
+    try {
+        const parsed = JSON.parse(raw) as Partial<RestoreGuidance>;
+        return {
+            inpaintCreases:
+                typeof parsed.inpaintCreases === "boolean"
+                    ? parsed.inpaintCreases
+                    : DEFAULT_GUIDANCE.inpaintCreases,
+            inpaintStains:
+                typeof parsed.inpaintStains === "boolean"
+                    ? parsed.inpaintStains
+                    : DEFAULT_GUIDANCE.inpaintStains,
+            protectText:
+                typeof parsed.protectText === "boolean"
+                    ? parsed.protectText
+                    : DEFAULT_GUIDANCE.protectText,
+            protectLines:
+                typeof parsed.protectLines === "boolean"
+                    ? parsed.protectLines
+                    : DEFAULT_GUIDANCE.protectLines,
+            notes:
+                typeof parsed.notes === "string" ? parsed.notes : undefined,
+        };
+    } catch {
+        return { ...DEFAULT_GUIDANCE };
+    }
+}
+
+
+function protectInkInMask(
+    mask: Buffer,
+    gray: Uint8Array,
+    width: number,
+    height: number,
+    edgeThreshold = 28
+): Buffer {
+    const out = Buffer.from(mask);
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            const i = y * width + x;
+            if (out[i] === 0) continue;
+
+            const gx = gray[i + 1] - gray[i - 1];
+            const gy = gray[i + width] - gray[i - width];
+            const mag = Math.abs(gx) + Math.abs(gy);
+
+            // Strong local contrast → likely ink / text / line → clear mask
+            if (mag >= edgeThreshold) {
+                out[i] = 0;
+            }
+        }
+    }
+    return out;
+}
+
 export async function POST(request: Request) {
     try {
         const form = await request.formData();
         const image = form.get("image");
 
         if (!(image instanceof File)) {
-            return NextResponse.json({ error: "Image required" }, { status: 400 });
+            return NextResponse.json(
+                { error: "Image required" },
+                { status: 400 }
+            );
+        }
+
+        const guidance = parseGuidance(form.get("guidance"));
+        if (guidance.notes) {
+            console.info("[restore/process] guidance notes:", guidance.notes);
         }
 
         const buffer = Buffer.from(await image.arrayBuffer());
 
-        // 1. Light cleanup
+        // 1. Always run light deterministic cleanup (deskew tone, dust, etc.)
         let restored: Buffer = await cleanupScan(buffer);
 
-        // 2. Detect creases
-        const { data, info } = await sharp(restored)
-            .greyscale()
-            .raw()
-            .toBuffer({ resolveWithObject: true });
+        let creasesRemoved = 0;
+        let creasesDetected = 0;
+        let maskPixels = 0;
 
-        const gray = new Uint8Array(data);
-        const defects = detectHorizontalCreases(gray, info.width, info.height, {
-            thickness: 16,
-        });
+        // 2. Crease pass — only if Groq / UI says it's safe
+        if (guidance.inpaintCreases) {
+            const { data, info } = await sharp(restored)
+                .greyscale()
+                .raw()
+                .toBuffer({ resolveWithObject: true });
 
-        if (defects.length > 0) {
-            const mask = createMask(info.width, info.height, defects);
-            restored = await inpaint(restored, mask, info.width, info.height);
+            const gray = new Uint8Array(data);
+
+            // Slightly thinner kernel when protecting linework so we
+            // don't swallow fine ink into the defect band.
+            const thickness =
+                guidance.protectLines || guidance.protectText ? 12 : 16;
+
+            const defects = detectHorizontalCreases(
+                gray,
+                info.width,
+                info.height,
+                { thickness }
+            );
+            creasesDetected = defects.length;
+
+            if (defects.length > 0) {
+                let mask = createMask(info.width, info.height, defects);
+
+                if (guidance.protectLines || guidance.protectText) {
+                    mask = protectInkInMask(
+                        mask,
+                        gray,
+                        info.width,
+                        info.height,
+                        guidance.protectText ? 24 : 32
+                    );
+                }
+
+                // Count remaining mask pixels for diagnostics
+                for (let i = 0; i < mask.length; i++) {
+                    if (mask[i] > 0) maskPixels++;
+                }
+
+                // Skip inpaint if protection wiped the whole mask
+                if (maskPixels > 0) {
+                    restored = await inpaint(
+                        restored,
+                        mask,
+                        info.width,
+                        info.height
+                    );
+                    creasesRemoved = defects.length;
+                }
+            }
         }
+
+        // 3. Stain pass placeholder — gated by guidance, not implemented yet
+        // if (guidance.inpaintStains) { ... }
 
         const output = `data:image/png;base64,${restored.toString("base64")}`;
 
         return NextResponse.json({
             image: output,
             restored: true,
-            creasesRemoved: defects.length,
+            guidance,
+            creasesDetected,
+            creasesRemoved,
+            maskPixels,
+            // Echo so the UI can show what ran
+            applied: {
+                cleanup: true,
+                creases: guidance.inpaintCreases && creasesRemoved > 0,
+                stains: false,
+                inkProtection:
+                    guidance.protectLines || guidance.protectText,
+            },
         });
     } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Restoration failed" }, { status: 500 });
+        console.error("[restore/process]", error);
+        return NextResponse.json(
+            {
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : "Restoration failed",
+            },
+            { status: 500 }
+        );
     }
 }

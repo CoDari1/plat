@@ -1,90 +1,86 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
 export const runtime = "nodejs";
 
-const RESTORE_PROMPT = `
-Inspect this historical scan as a conservation specialist.
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-Identify:
-- tears
-- scratches
-- dust
-- missing pixels
-- empty gaps
-- exposure inconsistencies
-- stitching artifacts
+const SYSTEM = `You are an expert at archival survey plats and cadastral maps.
+You analyze a scanned/stitched plat image and classify visible elements.
 
-Return JSON only:
+PRESERVE (never erase or inpaint over):
+- Inked property lines, curves, lot boundaries
+- Text: titles, lot numbers, bearings, distances, notes
+- North arrow, scale, legend, seals, signatures
+- Any mark that carries legal or survey meaning
 
+REMOVE / CLEAN (safe to inpaint or suppress):
+- Fold creases, horizontal/vertical scan streaks
+- Stains, foxing, dirt, tape residue
+- Scanner edge noise, black borders, dust spots
+- Background paper discoloration (tone only — do not touch ink)
+
+Return ONLY valid JSON matching this schema:
 {
-  "issues": [
-    {
-      "type": "",
-      "location": "",
-      "severity": "low|medium|high",
-      "recommended_action": ""
-    }
-  ],
-  "notes": ""
-}
-
-Rules:
-- Preserve geometry
-- Preserve typography
-- Preserve faces and objects
-- Do not invent missing details
-- This is analysis only
-`;
+  "summary": "one sentence",
+  "preserve": [{ "label": string, "reason": string }],
+  "remove": [{ "label": string, "reason": string, "severity": "low"|"medium"|"high" }],
+  "guidance": {
+    "inpaintCreases": boolean,
+    "inpaintStains": boolean,
+    "protectText": boolean,
+    "protectLines": boolean,
+    "notes": string
+  }
+}`;
 
 export async function POST(request: Request) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    try {
+        const form = await request.formData();
+        const image = form.get("image");
+        if (!(image instanceof File)) {
+            return NextResponse.json({ error: "Image required" }, { status: 400 });
+        }
 
-    if (!apiKey) {
+        const buffer = Buffer.from(await image.arrayBuffer());
+        const base64 = buffer.toString("base64");
+        const mime = image.type || "image/png";
+
+        // Use a current Groq vision model from their docs
+        const completion = await groq.chat.completions.create({
+            model: "meta-llama/llama-4-scout-17b-16e-instruct", // or whatever vision model your console lists
+            temperature: 0.1,
+            max_tokens: 1200,
+            response_format: { type: "json_object" },
+            messages: [
+                { role: "system", content: SYSTEM },
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: "Classify preserve vs remove for this stitched survey plat. Be conservative: when unsure, PRESERVE.",
+                        },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: `data:${mime};base64,${base64}`,
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        const raw = completion.choices[0]?.message?.content ?? "{}";
+        const analysis = JSON.parse(raw);
+
+        return NextResponse.json({ analysis });
+    } catch (err) {
+        console.error(err);
         return NextResponse.json(
-            { error: "Missing GEMINI_API_KEY" },
-            { status: 503 }
+            { error: err instanceof Error ? err.message : "Analysis failed" },
+            { status: 500 }
         );
     }
-
-    const form = await request.formData();
-    const image = form.get("image");
-
-    if (!(image instanceof File)) {
-        return NextResponse.json(
-            { error: "Image required" },
-            { status: 400 }
-        );
-    }
-
-
-    const buffer = Buffer.from(await image.arrayBuffer());
-
-    const base64 = buffer.toString("base64");
-
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-    });
-
-
-    const result = await model.generateContent([
-        RESTORE_PROMPT,
-        {
-            inlineData: {
-                mimeType: image.type,
-                data: base64,
-            },
-        },
-    ]);
-
-
-    const text = result.response.text();
-
-
-    return NextResponse.json({
-        analysis: text
-    });
 }
