@@ -1,3 +1,4 @@
+// app/api/restore/process/route.ts
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { cleanupScan } from "@/lib/restoration/cleanup";
@@ -6,17 +7,11 @@ import { inpaint } from "@/lib/restoration/inpaint";
 
 export const runtime = "nodejs";
 
-/** Guidance produced by /api/restore/analyze (Groq) or the client UI. */
 export interface RestoreGuidance {
-    /** Run horizontal crease detection + inpaint */
     inpaintCreases: boolean;
-    /** Reserved for future stain / foxing pass */
     inpaintStains: boolean;
-    /** Prefer keeping high-contrast ink when masking */
     protectText: boolean;
-    /** Prefer keeping linework when masking */
     protectLines: boolean;
-    /** Free-form notes from the model (logged only) */
     notes?: string;
 }
 
@@ -50,23 +45,21 @@ function parseGuidance(raw: FormDataEntryValue | null): RestoreGuidance {
                 typeof parsed.protectLines === "boolean"
                     ? parsed.protectLines
                     : DEFAULT_GUIDANCE.protectLines,
-            notes:
-                typeof parsed.notes === "string" ? parsed.notes : undefined,
+            notes: typeof parsed.notes === "string" ? parsed.notes : undefined,
         };
     } catch {
         return { ...DEFAULT_GUIDANCE };
     }
 }
 
-
 function protectInkInMask(
-    mask: Buffer,
+    mask: Uint8Array,
     gray: Uint8Array,
     width: number,
     height: number,
     edgeThreshold = 28
-): Buffer {
-    const out = Buffer.from(mask);
+): Uint8Array {
+    const out = new Uint8Array(mask);
     for (let y = 1; y < height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
             const i = y * width + x;
@@ -74,10 +67,7 @@ function protectInkInMask(
 
             const gx = gray[i + 1] - gray[i - 1];
             const gy = gray[i + width] - gray[i - width];
-            const mag = Math.abs(gx) + Math.abs(gy);
-
-            // Strong local contrast → likely ink / text / line → clear mask
-            if (mag >= edgeThreshold) {
+            if (Math.abs(gx) + Math.abs(gy) >= edgeThreshold) {
                 out[i] = 0;
             }
         }
@@ -103,15 +93,12 @@ export async function POST(request: Request) {
         }
 
         const buffer = Buffer.from(await image.arrayBuffer());
-
-        // 1. Always run light deterministic cleanup (deskew tone, dust, etc.)
         let restored: Buffer = await cleanupScan(buffer);
 
         let creasesRemoved = 0;
         let creasesDetected = 0;
         let maskPixels = 0;
 
-        // 2. Crease pass — only if Groq / UI says it's safe
         if (guidance.inpaintCreases) {
             const { data, info } = await sharp(restored)
                 .greyscale()
@@ -119,9 +106,6 @@ export async function POST(request: Request) {
                 .toBuffer({ resolveWithObject: true });
 
             const gray = new Uint8Array(data);
-
-            // Slightly thinner kernel when protecting linework so we
-            // don't swallow fine ink into the defect band.
             const thickness =
                 guidance.protectLines || guidance.protectText ? 12 : 16;
 
@@ -146,12 +130,10 @@ export async function POST(request: Request) {
                     );
                 }
 
-                // Count remaining mask pixels for diagnostics
                 for (let i = 0; i < mask.length; i++) {
                     if (mask[i] > 0) maskPixels++;
                 }
 
-                // Skip inpaint if protection wiped the whole mask
                 if (maskPixels > 0) {
                     restored = await inpaint(
                         restored,
@@ -164,9 +146,6 @@ export async function POST(request: Request) {
             }
         }
 
-        // 3. Stain pass placeholder — gated by guidance, not implemented yet
-        // if (guidance.inpaintStains) { ... }
-
         const output = `data:image/png;base64,${restored.toString("base64")}`;
 
         return NextResponse.json({
@@ -176,13 +155,11 @@ export async function POST(request: Request) {
             creasesDetected,
             creasesRemoved,
             maskPixels,
-            // Echo so the UI can show what ran
             applied: {
                 cleanup: true,
                 creases: guidance.inpaintCreases && creasesRemoved > 0,
                 stains: false,
-                inkProtection:
-                    guidance.protectLines || guidance.protectText,
+                inkProtection: guidance.protectLines || guidance.protectText,
             },
         });
     } catch (error) {
