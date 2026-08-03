@@ -6,7 +6,7 @@ import { useImageLoader } from "@/hooks/useImages";
 import { arrangePlatGrid } from "@/lib/layout";
 import { EditorMode, PlatImage } from "@/types";
 
-export default function Sidebar({ images, setImages, mode, setMode, onRemove, onAutoCorrect, busy }: {
+export default function Sidebar({ images, setImages, mode, setMode, onRemove, onAutoCorrect, busy, selected, setSelected }: {
     images: PlatImage[];
     setImages: React.Dispatch<React.SetStateAction<PlatImage[]>>;
     mode: EditorMode;
@@ -14,6 +14,8 @@ export default function Sidebar({ images, setImages, mode, setMode, onRemove, on
     onRemove: (id: number) => void;
     onAutoCorrect: () => void | Promise<void>;
     busy: boolean;
+    selected: Set<number>;
+    setSelected: React.Dispatch<React.SetStateAction<Set<number>>>;
 }) {
     const loadFiles = useImageLoader(setImages);
     const [uploading, setUploading] = useState(false);
@@ -49,7 +51,7 @@ export default function Sidebar({ images, setImages, mode, setMode, onRemove, on
             <p className="hint">{mode === "move" ? "Drag plates to position them." : "Click matching locations on two different plates."}</p>
 
             <div className="section-title">Images · {images.length}</div>
-            <ImageList images={images} setImages={setImages} onRemove={onRemove} />
+            <ImageList images={images} setImages={setImages} onRemove={onRemove} selected={selected} setSelected={setSelected} />
             {images.length > 0 && (
                 <button className="wide" disabled={busy} onClick={onAutoCorrect}>
                     {busy ? "CORRECTING…" : "AUTO-CORRECT (straighten + background)"}

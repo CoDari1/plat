@@ -139,7 +139,46 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--green); out
 .plat-image.selected {
   outline: 1px solid var(--green);
 }
+.plat-image.grouped {
+  outline: 1px dashed var(--blue, #5b9dd9);
+  outline-offset: 2px;
+}
+.plat-image.selected.grouped {
+  outline: 1px solid var(--green);
+  box-shadow: 0 0 0 3px rgba(91,157,217,0.35);
+}
 .plat-image.point-mode { cursor: crosshair; }
+
+.marquee-select {
+  position: absolute;
+  border: 1px solid var(--green);
+  background: rgba(62,207,142,0.12);
+  pointer-events: none;
+  z-index: 15;
+}
+
+.selection-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel, #0f1517);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.selection-toolbar button {
+  font-size: 0.9em;
+}
+.selection-toolbar kbd {
+  font-size: 0.85em;
+  opacity: 0.7;
+  margin-left: 4px;
+}
 
 /* Control points */
 

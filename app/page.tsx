@@ -28,6 +28,7 @@ export default function Home() {
     const [points, setPoints] = useState<ControlPoint[]>([]);
     const [mode, setMode] = useState<EditorMode>("move");
     const [pending, setPending] = useState<PendingPoint | null>(null);
+    const [selected, setSelected] = useState<Set<number>>(new Set());
 
     const [previewCanvas, setPreviewCanvas] =
         useState<HTMLCanvasElement | null>(null);
@@ -524,6 +525,13 @@ export default function Home() {
                 ? null
                 : current
         );
+
+        setSelected((current) => {
+            if (!current.has(id)) return current;
+            const next = new Set(current);
+            next.delete(id);
+            return next;
+        });
     }
 
 
@@ -544,6 +552,8 @@ export default function Home() {
                     onRemove={handleRemoveImage}
                     onAutoCorrect={handleAutoCorrect}
                     busy={busy}
+                    selected={selected}
+                    setSelected={setSelected}
                 />
 
 
@@ -555,6 +565,8 @@ export default function Home() {
                     mode={mode}
                     pending={pending}
                     setPending={setPending}
+                    selected={selected}
+                    setSelected={setSelected}
                 />
 
 

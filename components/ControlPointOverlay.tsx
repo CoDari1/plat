@@ -14,7 +14,7 @@ export default function ControlPointOverlay({
 }) {
    return (
        <svg
-           className="absolute top-0 left-0 pointer-events-none"
+           style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
            width="100%"
            height="100%"
        >

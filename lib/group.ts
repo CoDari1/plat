@@ -1,26 +1,21 @@
-// lib/groups.ts (new file)
+// lib/group.ts
 import { PlatImage } from "@/types";
 
-export function moveGroup(
-    images: PlatImage[],
-    draggedId: number,
-    dx: number,
-    dy: number
-): PlatImage[] {
-    const dragged = images.find(i => i.id === draggedId);
-    if (!dragged?.groupId) {
-        // not locked — move only itself
-        return images.map(img =>
-            img.id === draggedId
-                ? { ...img, x: img.x + dx, y: img.y + dy }
-                : img
-        );
-    }
+/** Assigns a new shared groupId to every image whose id is in `ids`. No-op below 2 images. */
+export function groupImages(images: PlatImage[], ids: Set<number>): PlatImage[] {
+    if (ids.size < 2) return images;
+    const groupId = Date.now();
+    return images.map((img) => (ids.has(img.id) ? { ...img, groupId } : img));
+}
 
-    // move every image that shares the same groupId
-    return images.map(img =>
-        img.groupId === dragged.groupId
-            ? { ...img, x: img.x + dx, y: img.y + dy }
-            : img
-    );
+/** Clears groupId on every image whose id is in `ids`. */
+export function ungroupImages(images: PlatImage[], ids: Set<number>): PlatImage[] {
+    return images.map((img) => (ids.has(img.id) ? { ...img, groupId: null } : img));
+}
+
+/** Every id that shares a groupId with `id` (including itself). Returns just [id] if ungrouped. */
+export function groupMembers(images: PlatImage[], id: number): number[] {
+    const target = images.find((img) => img.id === id);
+    if (!target?.groupId) return [id];
+    return images.filter((img) => img.groupId === target.groupId).map((img) => img.id);
 }

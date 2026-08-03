@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
 import { PlatImage } from "@/types";
 
 const RAD = Math.PI / 180;
 
 export default function ImageList({
-                                      images,
-                                      setImages,
-                                      onRemove,
-                                  }: {
+    images,
+    setImages,
+    onRemove,
+    selected,
+    setSelected,
+}: {
     images: PlatImage[];
     setImages: React.Dispatch<React.SetStateAction<PlatImage[]>>;
     onRemove: (id: number) => void;
+    selected: Set<number>;
+    setSelected: React.Dispatch<React.SetStateAction<Set<number>>>;
 }) {
-    const [selected, setSelected] = useState<Set<number>>(new Set());
-
     function reorder(index: number, offset: number) {
         const target = index + offset;
         if (target < 0 || target >= images.length) return;
@@ -50,62 +51,25 @@ export default function ImageList({
         });
     }
 
-    function lockSelected() {
-        if (selected.size < 2) return;
-        const newGroupId = Date.now();
-        setImages((prev) =>
-            prev.map((img) =>
-                selected.has(img.id) ? { ...img, groupId: newGroupId } : img
-            )
-        );
-        setSelected(new Set());
-    }
-
-    function unlock(id: number) {
-        setImages((prev) =>
-            prev.map((img) =>
-                img.id === id ? { ...img, groupId: null } : img
-            )
-        );
-    }
-
-    function unlockAll() {
-        setImages((prev) =>
-            prev.map((img) => ({ ...img, groupId: null }))
-        );
-        setSelected(new Set());
-    }
-
-    const hasAnyLocked = images.some((img) => img.groupId != null);
-
     if (images.length === 0) {
         return <p className="empty-copy">No images loaded yet.</p>;
     }
 
     return (
         <div className="image-list">
-            {/* Action bar */}
-            <div className="button-row" style={{ marginBottom: 8, gap: 6 }}>
-                {selected.size >= 2 && (
-                    <button className="wide primary" onClick={lockSelected}>
-                        🔒 Lock {selected.size} selected
-                    </button>
-                )}
-                {hasAnyLocked && (
-                    <button className="wide" onClick={unlockAll}>
-                        🔓 Unlock all
-                    </button>
-                )}
-            </div>
+            <p className="hint" style={{ marginBottom: 8 }}>
+                Click a thumbnail to select · shift-click to add · drag-select on canvas ·
+                <kbd>{typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? " ⌘G" : " Ctrl+G"}</kbd> to group
+            </p>
 
             {images.map((image, index) => {
                 const isSelected = selected.has(image.id);
-                const isLocked = image.groupId != null;
+                const isGrouped = image.groupId != null;
 
                 return (
                     <div
                         className={`image-row ${isSelected ? "selected" : ""} ${
-                            isLocked ? "grouped" : ""
+                            isGrouped ? "grouped" : ""
                         }`}
                         key={image.id}
                     >
@@ -115,18 +79,18 @@ export default function ImageList({
                                 className="thumbnail"
                                 src={image.src}
                                 alt=""
-                                onClick={() => toggleSelect(image.id)}
+                                onClick={(e) => (e.shiftKey ? toggleSelect(image.id) : setSelected(new Set([image.id])))}
                                 style={{ cursor: "pointer" }}
                             />
                             <span
                                 className="image-name"
                                 title={image.name}
-                                onClick={() => toggleSelect(image.id)}
+                                onClick={(e) => (e.shiftKey ? toggleSelect(image.id) : setSelected(new Set([image.id])))}
                                 style={{ cursor: "pointer" }}
                             >
-                {image.name}
-                                {isLocked && " 🔗"}
-              </span>
+                                {image.name}
+                                {isGrouped && " 🔗"}
+                            </span>
 
                             <button
                                 className="icon-button"
@@ -174,18 +138,6 @@ export default function ImageList({
                             </button>
                             <button className="icon-button" onClick={() => setRotationDeg(image.id, 0)}>
                                 0°
-                            </button>
-
-                            {/* Lock / Unlock single */}
-                            <button
-                                className="icon-button"
-                                title={isLocked ? "Unlock this image" : "Select for locking"}
-                                onClick={() => {
-                                    if (isLocked) unlock(image.id);
-                                    else toggleSelect(image.id);
-                                }}
-                            >
-                                {isLocked ? "🔓" : "🔒"}
                             </button>
                         </div>
                     </div>
