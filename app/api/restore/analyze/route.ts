@@ -1,26 +1,24 @@
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const runtime = "nodejs";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 const SYSTEM = `You are an expert at archival survey plats and cadastral maps.
-You analyze a scanned/stitched plat image and classify visible elements.
+Classify visible elements in the image.
 
-PRESERVE (never erase or inpaint over):
-- Inked property lines, curves, lot boundaries
+PRESERVE (never erase):
+- Property lines, curves, lot boundaries
 - Text: titles, lot numbers, bearings, distances, notes
 - North arrow, scale, legend, seals, signatures
-- Any mark that carries legal or survey meaning
+- Any mark with legal or survey meaning
 
-REMOVE / CLEAN (safe to inpaint or suppress):
-- Fold creases, horizontal/vertical scan streaks
+REMOVE / CLEAN (safe to inpaint):
+- Fold creases, scan streaks
 - Stains, foxing, dirt, tape residue
-- Scanner edge noise, black borders, dust spots
-- Background paper discoloration (tone only — do not touch ink)
+- Scanner edge noise, dust
+- Background discoloration only (do not touch ink)
 
-Return ONLY valid JSON matching this schema:
+Return ONLY valid JSON:
 {
   "summary": "one sentence",
   "preserve": [{ "label": string, "reason": string }],
@@ -32,10 +30,20 @@ Return ONLY valid JSON matching this schema:
     "protectLines": boolean,
     "notes": string
   }
-}`;
+}
+When unsure, PRESERVE. Be conservative.`;
 
 export async function POST(request: Request) {
     try {
+        const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+            ?? process.env.GEMINI_API_KEY;
+        if (!key) {
+            return NextResponse.json(
+                { error: "Missing GOOGLE_GENERATIVE_AI_API_KEY" },
+                { status: 500 }
+            );
+        }
+
         const form = await request.formData();
         const image = form.get("image");
         if (!(image instanceof File)) {
@@ -46,40 +54,39 @@ export async function POST(request: Request) {
         const base64 = buffer.toString("base64");
         const mime = image.type || "image/png";
 
-        // Use a current Groq vision model from their docs
-        const completion = await groq.chat.completions.create({
-            model: "meta-llama/llama-4-scout-17b-16e-instruct", // or whatever vision model your console lists
-            temperature: 0.1,
-            max_tokens: 1200,
-            response_format: { type: "json_object" },
-            messages: [
-                { role: "system", content: SYSTEM },
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "text",
-                            text: "Classify preserve vs remove for this stitched survey plat. Be conservative: when unsure, PRESERVE.",
-                        },
-                        {
-                            type: "image_url",
-                            image_url: {
-                                url: `data:${mime};base64,${base64}`,
-                            },
-                        },
-                    ],
-                },
-            ],
+        const genAI = new GoogleGenerativeAI(key);
+        const model = genAI.getGenerativeModel({
+            model: "gemini-2.0-flash", // or gemini-1.5-flash / gemini-2.5-flash
+            generationConfig: {
+                temperature: 0.1,
+                responseMimeType: "application/json",
+            },
         });
 
-        const raw = completion.choices[0]?.message?.content ?? "{}";
+        const result = await model.generateContent([
+            { text: SYSTEM },
+            {
+                inlineData: {
+                    mimeType: mime,
+                    data: base64,
+                },
+            },
+            {
+                text: "Classify preserve vs remove for this stitched survey plat. JSON only.",
+            },
+        ]);
+
+        const raw = result.response.text();
         const analysis = JSON.parse(raw);
 
         return NextResponse.json({ analysis });
     } catch (err) {
-        console.error(err);
+        console.error("[restore/analyze]", err);
         return NextResponse.json(
-            { error: err instanceof Error ? err.message : "Analysis failed" },
+            {
+                error:
+                    err instanceof Error ? err.message : "Analysis failed",
+            },
             { status: 500 }
         );
     }
